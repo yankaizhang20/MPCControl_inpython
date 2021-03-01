@@ -145,11 +145,11 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
             if (rout[i, 0] - x)**2+(rout[i, 1] - y)**2 < distance:
                 distance = (rout[i, 0] - x)**2+(rout[i, 1] - y)**2
                 n = i
-        n+=10;
+        n=n+1
         # while rout[n, 0] < x or rout[n, 0] < y:
         #     n = n+1
         if n < lastref:
-            n = lastref+10
+            n = lastref
         # n=int(t/20)
         # while rout[n,0] < x:
         #     n+=1
