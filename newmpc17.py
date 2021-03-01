@@ -111,7 +111,7 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
     # 每隔0.02s选择一个参考点，到选择参考点的时刻
     if t % 20 == 0:
         # 参考轨迹点值，包括三段，每段包括x,y,heading,v,curve
-        rout = GetRefTrack("D:\\trackpath_sim\\light\\roads.xlsx")
+        rout = GetRefTrack("D:\\trackpath_sim\\light\\roads-half.xlsx")
         # route_2 = GetRefTrack("D:\\trackpath_sim\\simulation\\rout_info\\typeL\\1300\\second.xlsx")
         # route_3 = GetRefTrack("D:\\trackpath_sim\\simulation\\rout_info\\typeL\\1300\\third.xlsx")
         # rout = np.vstack((route_1, route_2, route_3))
@@ -522,7 +522,7 @@ if __name__ == '__main__':
     # route_3 = GetRefTrack("D:\\trackpath_sim\\simulation\\rout_info\\typeL\\1300\\third.xlsx")
     # rout = np.vstack((route_1, route_2, route_3))
     #rout = np.loadtxt("D:\\Python\\install\\result.txt")
-    rout = GetRefTrack("D:\\trackpath_sim\\light\\roads.xlsx")
+    rout = GetRefTrack("D:\\trackpath_sim\\light\\roads-half.xlsx")
     # 每次运行之前将tmpUk_1.txt文件重置
     with open("D:\\Python\\install\\tmpUk_1.txt", 'w') as f:
         f.write("0 0\n")
