@@ -3,9 +3,9 @@
 # 2020.11.15 9:46 by张艳凯 try: 更改车速限制为3后,相比于0.3的运行结果较好，但是转角值仍然在剧烈变化。当初始位置为0时，转角值依然不是0，找到原因（车辆控制信息文件tmpUK_1.txt运行结束后没有清零）
 #            9:54 by张艳凯 try: 联合matlab测试选取最近路点的效果。当初始点为0.5的时候依然会走sin，当初始点在参考点的时候，比较完美地走完美的走完了第一段直线，中间有轻微的转向（肉眼不可见）
 # 2020.11.16 8:51 by张艳凯 increase： 增加参考点至所有路段
-#                          increase： 增加运行绘制图片前将tmpUk_1文件重置为0 0\n代码
+#                         increase： 增加运行绘制图片前将tmpUk_1文件重置为0 0\n代码
 #                         problem： report： else:  #处在第三段则选择大于且最靠近(70,y)的参考点
-#                                           TypeError: ufunc 'bitwise_and' not supported for the input types, and the inputs could not be safely coerced to any supported types according to the casting rule ''safe''
+#                                   TypeError: ufunc 'bitwise_and' not supported for the input types, and the inputs could not be safely coerced to any supported types according to the casting rule ''safe''
 #                                   idea： func MPC中设置的全局变量i不能在for循环中使用，直接把for中执行后的if语句穿给n。也不行（UnboundLocalError: local variable 'n' referenced before assignment）
 #                                   idea： 是因为n的作用域的原因导致unboundlocalerror，在func MPC开头增加n=0。也不行
 #                                   solve： 是把python中的与操作搞错了，&是按位与，and才是判断条件
@@ -16,20 +16,21 @@
 #2020.11.19 kai15 by刘翀    increase：重写了参考点选取模块，重写了权重矩阵，增加了轨迹显示，实际误差已经小于2cm
 #2020.11.20 kai33 by刘翀    change：增加预测时域到20，效果很好
 #2020.11.27 newmpc1 by张艳凯  change: 从txt文件中读取参考路点
-
-forpython=0
+# 如果在纯python环境不仿真运行，设置forpython=1，仿真设置=0
+forpython = 1
 
 import numpy as np
 import math
 from cvxopt import solvers as so, matrix
 import array
 import xlrd
-if forpython==1:
-   import logging
-   import matplotlib.pyplot as plt
 
-   logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-   logger = logging.getLogger(__name__)
+if forpython == 1:
+    import logging
+    import matplotlib.pyplot as plt
+
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = logging.getLogger(__name__)
 
 
 # 从文件中读取上一时刻的控制参考量,该函数需要改进，文件过大时浪费的空间太多
@@ -50,7 +51,6 @@ def storeU_k_1(testname, v_k_1, delta_k_1):
         f.write("%s %s\n" % (v_k_1, delta_k_1))
 
 
-# 控制域为3 预测域为4
 class trajectory(object):
     def __init__(self, x, y, heading, delta, accelerate, time, speed):
         self.x = x
@@ -96,7 +96,8 @@ def Matrixpower(A, n):
     return result
 
 
-def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者说上一时刻状态)
+def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者说上一时刻状态）
+    # 在仿真条件下 需要弧度角度转化
     if forpython != 1:
         heading = heading / 180 * math.pi
     filename = "D:\\Python\\install\\tmpUk_1.txt"
@@ -108,7 +109,7 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
     n=0
     # 打开日志文件
     loggo = open("D:\\Python\\install\\loggo.txt", 'a')
-    # 每隔0.02s选择一个参考点，到选择参考点的时刻
+    # 每隔0.02s选择一个参考点，到选择参考点的时刻0
     if t % 20 == 0:
         # 参考轨迹点值，包括三段，每段包括x,y,heading,v,curve
         rout = GetRefTrack("D:\\trackpath_sim\\light\\roads-twice.xlsx")
@@ -119,7 +120,10 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         #从refpoint.txt文件中读取参考点信息（x y heading v delta)
         #rout=np.loadtxt("D:\\Python\\install\\result.txt")
         (a, b) = rout.shape
-
+        # 确定步长 保证预测的距离
+        predicted_diatance = 6
+        step = round(predicted_diatance / math.sqrt((rout[1, 0] - rout[0, 0])**2+(rout[1, 1] - rout[0, 0])**2))
+        print("step", step)
         # 选择当前参考点
         # 参考点超过太多，选择离当前位置最近的参考点，并且Xr>x
         # if x < 50:  # 如果处在第一段和第二段则选择大于且最靠近(x,0)的参考点
@@ -145,16 +149,18 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
             if (rout[i, 0] - x)**2+(rout[i, 1] - y)**2 < distance:
                 distance = (rout[i, 0] - x)**2+(rout[i, 1] - y)**2
                 n = i
-        n=n+1
-        # while rout[n, 0] < x or rout[n, 0] < y:
-        #     n = n+1
+        # n=n+1
+        while rout[n, 0] < x:
+            n = n+1
         if n < lastref:
             n = lastref
+        if n > a-1:
+            n = a-1
         # n=int(t/20)
         # while rout[n,0] < x:
         #     n+=1
         # plt.plot(rout[n, 0], rout[n, 1], color='red', marker='x')
-        print("n",n)
+        print("n", n)
         print(rout[n, 0])
         rx = round(rout[n, 0], enob)
 
@@ -194,11 +200,15 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         v_rk = round(rout[n, 3], enob)
         ref_v = []
         ref_delta = []
-        # n到了最后
-        if n >=1900: #1283:
-            for i in range(0, 20, 1):
+        # n到了最后step步
+        if n > a - step: #1283:
+            for i in range(0, step-a+n, 1):
                 ref_delta.append(round((rout[n, 4]), enob))
                 ref_v.append(round(rout[n, 3], enob))
+        # if n >= 1900:  # 1283:
+        #     for i in range(0, 20, 1):
+        #         ref_delta.append(round((rout[n, 4]), enob))
+        #         ref_v.append(round(rout[n, 3], enob))
             # delta_rk = round(math.asin(2.95 * rout[n, 4]), enob)
             # v_rk1 = round(rout[n, 3], enob)
             # delta_rk1 = round(math.asin(2.95 * rout[n, 4]), enob)
@@ -210,10 +220,13 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
 
 
         else:
-            for i in range(0, 20, 1):
-                ref_delta.append(round(rout[n, 4], enob))
+            for i in range(0, step, 1):
+                ref_delta.append(round(rout[n+i, 4], enob))
                 ref_v.append(round(rout[n+i, 3], enob))
-
+        # else:
+        #     for i in range(0, 20, 1):
+        #         ref_delta.append(round(rout[n, 4], enob))
+        #         ref_v.append(round(rout[n + i, 3], enob))
             # delta_rk = round(math.asin(2.95 * rout[n, 4]), enob)
             # v_rk1 = round(rout[n + 1, 3], enob)
             # delta_rk1 = round(math.asin(2.95 * rout[n + 1, 4]), enob)
@@ -247,35 +260,38 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
                        [heading - ref.phi],
                        [v_k_1 - v_rk_1],
                        [delta_k_1 - delta_rk_1]])
-        # 拼接psi 60*5 [CA CA^2 CA^3 CA^4  ... CA^20]^T
+        # 拼接psi (3*step)*5 [CA CA^2 CA^3 CA^4  ... CA^step]^T
         Psi = np.dot(C, A)
-        for i in range(2, 21, 1):
+        for i in range(2, step+1, 1):
             Psi = np.vstack((Psi, np.dot(C, Matrixpower(A, i))))
-        # 拼接theta 60*40                   抽象20*20
-        # Psi(k+1)  [CB        0       0       0        ...     0]
-        # Psi(k+2)  [CAB       CB      0       0        ...     0]
-        # Psi(k+3)  [CA^2B     CAB     CB      0        ...     0]
-        # Psi(k+4)  [CA^3B     CA^2B   CAB     CB       ...     0]
+        # 拼接theta (3*step)*(step*2)
+        # Psi(k+1)     [CB             0              0                0                  ...     0]
+        # Psi(k+2)     [CAB            CB             0                0                  ...     0]
+        # Psi(k+3)     [CA^2B          CAB            CB               0                  ...     0]
+        # Psi(k+4)     [CA^3B          CA^2B          CAB              CB                 ...     0]
+        #                                              ...
+        # Psi(k+n)     [CA^(n-1)B      CA^(n-2)B      CA^(n-3)B        C^(n-4)B           ...     0]
+        # Psi(k+step)  [CA^(step-1)B   CA^(step-2)B   CA^(step-3)B     CA^(step-4)B       ...     0]
         temporary = np.dot(C, B)
-        Theta = np.hstack((np.dot(C, B), np.zeros([3, 19*2])))
-        # range(2, 5, 1) 5是预测域+1
-        for i in range(2, 21, 1):
+        Theta = np.hstack((np.dot(C, B), np.zeros([3, (step-1)*2])))
+        # range(2, step+1, 1) step是预测域
+        for i in range(2, step+1, 1):
             CAn = np.dot(C, Matrixpower(A, i - 1))
             temporary = np.hstack((np.dot(CAn, B), temporary))
-            Theta_row = np.hstack((temporary, np.zeros([3, (20 - i) * 2])))
+            Theta_row = np.hstack((temporary, np.zeros([3, (step - i) * 2])))
             Theta = np.vstack((Theta, Theta_row))
-        # 求E 60*1
+        # 求E (3*step)*1
         E = np.dot(Psi, Xi)
         # 求Rho
         Rho = 20
-        # Q状态量的权重矩阵 12*12 分别是C*Xi 1-4的分量权重
+        # Q状态量的权重矩阵
         # d = 100*(x - ref.x)**2+100*(y - ref.y)**2+2
         d = 100 * (x - ref.x) ** 2 + 100 * (y - ref.y) ** 2+2
         dx = 0.5+100*(x - ref.x)**2
         dy = 0.5+100*(y - ref.y)**2
-        # Q 60*60
-        Q = np.zeros((60, 60))
-        for i in range(0, 60, 3):
+        # Q (3*step)*(3*step)
+        Q = np.zeros((3*step, 3*step))
+        for i in range(0, 3*step, 3):
             Q[i][i] = 1*dx
             Q[i+1][i+1] = 1*dy
             Q[i+2][i+2] = 1/d
@@ -292,9 +308,9 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         #               [0, 0, 0, 0, 0, 0, 0, 0, 0, 1*dx, 0, 0],
         #               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1*dy, 0],
         #               [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1/d]])
-        # R控制增量的权重矩阵 8*8
-        R = np.zeros((40, 40))
-        for i in range(0, 40, 1):
+        # R控制增量的权重矩阵 (2*step)*(2*step)
+        R = np.zeros((2*step, 2*step))
+        for i in range(0, 2*step, 1):
             # R[i][i] = 0.05
             R[i][i]=0.5
 
@@ -306,21 +322,22 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         #               [0, 0, 0, 0, 0, 0.05, 0, 0],
         #               [0, 0, 0, 0, 0, 0, 0.05, 0],
         #               [0, 0, 0, 0, 0, 0, 0, 0.05]])
-        # H [[ θ^T*Q*θ+R 0] [ 0        ρ] ]
+        # H [[ θ^T*Q*θ+R 0]
+        #    [ 0          ρ] ]
         # temporary=Theta^T*Q*Theta + R
         temporary = np.dot(Theta.T, Q)
         temporary = np.dot(temporary, Theta)
         temporary = temporary + R
-        H1 = np.hstack((temporary, np.zeros([40, 1])))
-        H2 = np.hstack((np.zeros([1, 40]), np.array([[Rho]])))
+        H1 = np.hstack((temporary, np.zeros([2*step, 1])))
+        H2 = np.hstack((np.zeros([1, 2*step]), np.array([[Rho]])))
         H = np.vstack((H1, H2)) * 0.5
         # 求f
         f = 2 * np.hstack((np.dot(np.dot(E.T, Q), Theta), np.array([[0]])))
 
         # 约束求解
-        # alpha + ur 40*1
-        alpha_ur = np.zeros([40, 1])
-        for i in range(0, 20, 1):
+        # alpha + ur (2*step)*1
+        alpha_ur = np.zeros([2*step, 1])
+        for i in range(0, step, 1):
             alpha_ur[i*2][0] = v_k_1 - v_rk_1 + ref_v[i]
             alpha_ur[i*2+1][0] = delta_k_1 - delta_rk_1 + ref_delta[i]
         # alpha_ur = np.array([[v_k_1 - v_rk_1 + v_rk],
@@ -331,12 +348,11 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         #                      [delta_k_1 - delta_rk_1 + delta_rk2],
         #                      [v_k_1 - v_rk_1 + v_rk3],
         #                      [delta_k_1 - delta_rk_1 + delta_rk3]])
-        # Uk-Ur-1 40
-        # *1
-        urk_urk_1 = np.zeros([40, 1])
+        # Uk-Ur-1 (2*step)*1
+        urk_urk_1 = np.zeros([2*step, 1])
         urk_urk_1[0][0] = - v_rk_1 + ref_v[0]
         urk_urk_1[0 + 1][0] = - delta_rk_1 + ref_delta[0]
-        for i in range(1, 20, 1):
+        for i in range(1, step, 1):
             urk_urk_1[i*2][0] = -ref_v[i-1] + ref_v[i]
             urk_urk_1[i*2+1][0] = -ref_delta[i-1] + ref_delta[i]
         # urk_urk_1 = np.array([[- v_rk_1 + v_rk],
@@ -350,8 +366,8 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         # Umax
         UV = 1.3
         Udelta = math.pi/4
-        U_max = np.zeros([40, 1])
-        for i in range(0, 40, 2):
+        U_max = np.zeros([2*step, 1])
+        for i in range(0, 2*step, 2):
             U_max[i][0] = UV
             U_max[i+1][0] = Udelta
         # U_max = np.array([[UV],
@@ -363,8 +379,8 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         #                   [UV],
         #                   [Udelta]])
         # Umin
-        U_min = np.zeros([40, 1])
-        for i in range(0, 40, 2):
+        U_min = np.zeros([2*step, 1])
+        for i in range(0, 2*step, 2):
             U_min[i][0] = -UV
             U_min[i + 1][0] = -Udelta
         # U_min = np.array([[-UV],
@@ -376,11 +392,11 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         #                   [-UV],
         #                   [-Udelta]])
         # Uamax
-        maxa = 2
-        mina = -2
+        maxa = math.pi
+        mina = -math.pi
         deltau = math.pi/6
-        U_a_max = np.zeros([40, 1])
-        for i in range(0, 40, 2):
+        U_a_max = np.zeros([2*step, 1])
+        for i in range(0, 2*step, 2):
             U_a_max[i][0] = maxa
             U_a_max[i+1][0] = deltau
         # 增大前轮转角加速度会减缓走sin曲线形式
@@ -393,8 +409,8 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         #                     [maxa],
         #                     [deltau]])
         # Uamin
-        U_a_min = np.zeros([40, 1])
-        for i in range(0, 40, 2):
+        U_a_min = np.zeros([2*step, 1])
+        for i in range(0, 2*step, 2):
             U_a_min[i][0] = mina
             U_a_min[i + 1][0] = -deltau
         # U_a_min = np.array([[mina],
@@ -412,13 +428,13 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         H = matrix(H)
         f = matrix(f)
         # matrix里区分int和double，所以数字后面都需要加小数点
-        # G是不等式的系数矩阵 32*9 前16行限制控制量本身，后16行限制控制量的增量
+        # G是不等式的系数矩阵 [2*step, 2*step+1] 前一半限制控制量本身，后一半限制控制量的增量
         # G1 G2 限制控制量  G3 G4限制控制量增量
-        G1 = np.zeros([40, 41])
-        G2 = np.zeros([40, 41])
-        G3 = np.zeros([40, 41])
-        G4 = np.zeros([40, 41])
-        for i in range(0, 40, 1):
+        G1 = np.zeros([2*step, 2*step+1])
+        G2 = np.zeros([2*step, 2*step+1])
+        G3 = np.zeros([2*step, 2*step+1])
+        G4 = np.zeros([2*step, 2*step+1])
+        for i in range(0, 2*step, 1):
             for j in range(0, i+1, 1):
                 # 行为偶数
                 if i % 2 == 0:
@@ -432,7 +448,7 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
                     if j % 2 != 0:
                         G1[i][j] = 1
                         G2[i][j] = -1
-        for i in range(0, 40, 1):
+        for i in range(0, 2*step, 1):
             G3[i][i] = 1
             G4[i][i] = -1
         G = np.vstack((G1, G2))
@@ -472,7 +488,7 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         #               [0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0],
         #               [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0],
         #               [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0, 0.0]])
-        # h是不等式的结果 160*1
+        # h是不等式的结果 (2*2*2*step)*1
         h = np.vstack((U_max - alpha_ur, -U_min + alpha_ur))
         h1 = np.vstack((T * U_a_max - urk_urk_1, urk_urk_1 - T * U_a_min))
         h = np.vstack((h, h1))
@@ -526,7 +542,7 @@ if __name__ == '__main__':
     # 每次运行之前将tmpUk_1.txt文件重置
     with open("D:\\Python\\install\\tmpUk_1.txt", 'w') as f:
         f.write("0 0\n")
-    loggotxt=open("D:\\Python\\install\\loggo.txt", 'w')
+    loggotxt = open("D:\\Python\\install\\loggo.txt", 'w')
     loggotxt.close()
     plt.ion()
     L = 2.95
@@ -535,12 +551,12 @@ if __name__ == '__main__':
     heading =0.785398
     X = []
     Y = []
-    T = np.arange(0, 30, 0.02)
+    T = np.arange(0, 55, 0.02)
     lastref = 0
     for t in T:
-        u, nowref= MPC(x, y, heading, t, lastref)
-        print("nowref",nowref)
-        lastref=nowref
+        u, nowref = MPC(x, y, heading, t, lastref)
+        print("nowref", nowref)
+        lastref = nowref
         x = x + u[0]*math.cos(heading) * 0.02
         # if y > rout[nowref,2]:
         y = y + u[0]*math.sin(heading) * 0.02
