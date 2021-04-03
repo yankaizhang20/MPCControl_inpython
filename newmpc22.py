@@ -4,6 +4,7 @@ from cvxopt import solvers as so, matrix
 import array
 import xlrd
 import json
+import datetime
 
 forpython=1
 if forpython==1:
@@ -155,10 +156,10 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         rtime = 0.02
         T = 0.02
         L = 2.95  # 车辆模型的轴距为2.95
-        loggo.write("当前时刻：%f" %(t))
-        loggo.write("当前参考点%d   " %(n))
-        loggo.write("n参考点数据：rx=%f  ry=%f  rheading=%f  rspeed=%f  rcurve=%f\n" % (rx, ry, rheading, rspeed, rcurve))
-        loggo.write("当前位置x:%f,y:%f,heading:%f\n" % (x, y, heading))
+
+        # loggo.write("当前参考点%d   " %(n))
+        # loggo.write("n参考点数据：rx=%f  ry=%f  rheading=%f  rspeed=%f  rcurve=%f\n" % (rx, ry, rheading, rspeed, rcurve))
+        # loggo.write("当前位置x:%f,y:%f,heading:%f\n" % (x, y, heading))
         # loggo("n+1参考：rx=%f  ry=%f  rheading=%f  rspeed=%f  rcurve=%f" %(rout[n+1,0],rout[n+1,1],rout[n+1,2],rout[n+1,3],rout[n+1,4]))
         # loggo("n+2参考：rx=%f  ry=%f  rheading=%f  rspeed=%f  rcurve=%f" %(rout[n+2,0],rout[n+2,1],rout[n+2,2],rout[n+2,3],rout[n+2,4]))
         # loggo("n+3参考：rx=%f  ry=%f  rheading=%f  rspeed=%f  rcurve=%f" %(rout[n+3,0],rout[n+3,1],rout[n+3,2],rout[n+3,3],rout[n+3,4]))
@@ -178,7 +179,7 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
             delta_k_1 = Uk_1[1]
             v_rk_1 = round(rout[n - 1, 3], enob)
             delta_rk_1 = round(rout[n - 1, 4], enob)
-        loggo.write("上一时刻控制量及参考控制量：v_k_1=%f  delta_k_1=%f v_rk_1=%f delta_rk_1=%f\n" % (v_k_1, delta_k_1, v_rk_1, delta_rk_1))
+        # loggo.write("上一时刻控制量及参考控制量：v_k_1=%f  delta_k_1=%f v_rk_1=%f delta_rk_1=%f\n" % (v_k_1, delta_k_1, v_rk_1, delta_rk_1))
         # k 到k+3时刻的参考控制量f
         v_rk = round(rout[n, 3], enob)
         ref_v = []
@@ -481,10 +482,14 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         # u_v1 = sol['x'][2] + v_rk1 + u_v - v_rk
         u_accelerate = round((u_v - v_k_1) / T, enob)
         storeU_k_1(filename, u_v, u_delta)
-        loggo.write("speed :%f   " %(u_v))
-        loggo.write("angle :%f   " %(u_delta))
-        loggo.write("accelerate :%f\n" %(u_accelerate))
-        loggo.write("---------------------------------------------------------------------------------------------------------------\n\n")
+        # loggo.write("speed :%f   " %(u_v))
+        # loggo.write("angle :%f   " %(u_delta))
+        # loggo.write("accelerate :%f\n" %(u_accelerate))
+
+        loggo.write("-----------------------------------------------------------------------------------------------------\n")
+        loggo.write("时刻:{:<5f}   参考点:{}\n".format(t/1000,n))
+        loggo.write("当前状态: x={:<15f}   y={:<15f}   heading={:<15f}   计算控制量: v={:<15f}   delta={:<15f}\n".format(x,y,heading,u_v,u_delta))
+        loggo.write("参考状态: x={:<15f}   y={:<15f}   heading={:<15f}   参考控制量: v={:<15f}   delta={:<15f}\n".format(rx, ry,rheading,rspeed,rcurve))
         loggo.close()
         if forpython:
             return array.array('d', [round(u_v, enob), round(u_delta, enob),n]),n
@@ -494,6 +499,11 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
     # 如果在时间步之间，则直接取上一时刻的控制量
     else:
         Uk_1 = readU_k_1(filename)
+        loggo.write("-----------------------------------------------------------------------------------------------------\n")
+        loggo.write("时刻:{:<5f}   参考点:{}\n".format(t / 1000, n))
+        loggo.write("当前状态: x={:<15f}   y={:<15f}   heading={:<15f}   计算控制量: v={:<15f}   delta={:<15f}\n".format(x, y, heading, Uk_1[0], Uk_1[1]))
+        loggo.write("参考状态: x={:<15f}   y={:<15f}   heading={:<15f}   参考控制量: v={:<15f}   delta={:<15f}\n".format(rx, ry, rheading, rspeed, rcurve))
+        loggo.close()
         if forpython:
             return array.array('d', [Uk_1[0], Uk_1[1],n]),n
         else:
@@ -518,6 +528,7 @@ if __name__ == '__main__':
     with open("D:\\Python\\install\\tmpUk_1.txt", 'w') as f:
         f.write("0 0\n")
     loggotxt=open("D:\\Python\\install\\loggo.txt", 'w')
+    loggotxt.write(str(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')))
     loggotxt.close()
     plt.ion()
     L = 2.95
