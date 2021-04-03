@@ -24,6 +24,7 @@ import math
 from cvxopt import solvers as so, matrix
 import array
 import xlrd
+import json
 
 if forpython == 1:
     import logging
@@ -84,7 +85,18 @@ def GetRefTrack(path):
         col = np.matrix(collist)
         array[:, x] = col
     return array
-
+# 获取json中的路点信息
+def GetJsonRefTrack(jsonpath):
+    with open(jsonpath,'r') as f:
+        data = json.load(f)
+        trajectory = data['trajectory']
+        list = []
+        for i in trajectory:
+            heading_rad=i['heading']/180*math.pi
+            angel_rad=i['angle']/180*math.pi
+            list.append([i['x_point'], i['y_point'], heading_rad, i['speed'], angel_rad])
+        array = np.array(list)
+    return array
 
 # 矩阵求幂
 def Matrixpower(A, n):
@@ -112,7 +124,8 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
     # 每隔0.02s选择一个参考点，到选择参考点的时刻
     if t % 20 == 0:
         # 参考轨迹点值，包括三段，每段包括x,y,heading,v,curve
-        rout = GetRefTrack("D:\\trackpath_sim\\light\\roads.xlsx")
+        # rout = GetRefTrack("D:\\trackpath_sim\\light\\road--y.xlsx")
+        rout = GetJsonRefTrack("D:\\trackpath_sim\\light\\jsonfile.json")
         # route_2 = GetRefTrack("D:\\trackpath_sim\\simulation\\rout_info\\typeL\\1300\\second.xlsx")
         # route_3 = GetRefTrack("D:\\trackpath_sim\\simulation\\rout_info\\typeL\\1300\\third.xlsx")
         # rout = np.vstack((route_1, route_2, route_3))
@@ -120,9 +133,11 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         #从refpoint.txt文件中读取参考点信息（x y heading v delta)
         #rout=np.loadtxt("D:\\Python\\install\\result.txt")
         (rout_size, b) = rout.shape
+        print(rout.shape)
         # 确定步长 保证预测的距离
         predicted_diatance = 6
         step = round(predicted_diatance / math.sqrt((rout[1, 0] - rout[0, 0])**2+(rout[1, 1] - rout[0, 0])**2))
+        step+=5
         print("step", step)
         # 选择当前参考点
         # 参考点超过太多，选择离当前位置最近的参考点，并且Xr>x
@@ -150,11 +165,11 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
                 distance = (rout[i, 0] - x)**2+(rout[i, 1] - y)**2
                 n = i
         # 选择目标前面的参考点
-        while n < rout_size and rout[n, 0] < x:
-            n = n+1
+        # while n < rout_size and rout[n, 0] < x:
+        #     n = n+1
         # 防止参考点倒退
-        if n < lastref:
-            n = lastref
+        if n <= lastref:
+            n = lastref+1
         # 防止参考点越界
         if n > rout_size-1:
             n = rout_size-1
@@ -547,9 +562,8 @@ if __name__ == '__main__':
     # route_1 = GetRefTrack("D:\\trackpath_sim\\simulation\\rout_info\\typeL\\1300\\first.xlsx")
     # route_2 = GetRefTrack("D:\\trackpath_sim\\simulation\\rout_info\\typeL\\1300\\second.xlsx")
     # route_3 = GetRefTrack("D:\\trackpath_sim\\simulation\\rout_info\\typeL\\1300\\third.xlsx")
-    # rout = np.vstack((route_1, route_2, route_3))
     #rout = np.loadtxt("D:\\Python\\install\\result.txt")
-    rout = GetRefTrack("D:\\trackpath_sim\\light\\roads.xlsx")
+    rout = GetJsonRefTrack("D:\\trackpath_sim\\light\\jsonfile.json")
     # 每次运行之前将tmpUk_1.txt文件重置
     with open("D:\\Python\\install\\tmpUk_1.txt", 'w') as f:
         f.write("0 0\n")
@@ -557,9 +571,9 @@ if __name__ == '__main__':
     loggotxt.close()
     plt.ion()
     L = 2.95
-    x = 0
-    y = 0
-    heading =0.785398
+    x = -97.8251783
+    y = -615.887209
+    heading = 0.348193399
     X = []
     Y = []
     T = np.arange(0, 55, 0.02)
