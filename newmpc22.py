@@ -146,6 +146,7 @@ def MPC(x, y, heading, t, lastref):  # x,y,heading为当前车辆状态（或者
         # plt.plot(rout[n, 0], rout[n, 1], color='red', marker='x')
         print("n",n)
         print(rout[n, 0])
+        plt.plot(rout[n,0],rout[n,1],color="red",marker="*")
         rx = round(rout[n, 0], enob)
 
         ry = round(rout[n, 1], enob)
@@ -551,7 +552,7 @@ if __name__ == '__main__':
         heading = heading + u[0] * math.tan(u[1]) / L * 0.02
         X.append(x)
         Y.append(y)
-        plt.plot(x, y, color="black", marker="*")
+        # plt.plot(x, y, color="black", marker="*")
         plt.plot(X, Y, color="black", marker=".")
         # n = int(u[2])
         # loggo("参考的点：%s" %(n))
